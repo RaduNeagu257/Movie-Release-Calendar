@@ -23,14 +23,26 @@ async function upsertGenres(type) {
   console.log(`✅ Genres for ${type} upserted (${data.genres.length} total).`);
 }
 
+// Process a batch of items into the DB
 async function processItems(items, type) {
-  // Determine the correct type for movie or TV
+  console.log(`🚀 Processing ${items.length} items for ${type}`);  // log how many items we're processing
+
+  // Check if type includes 'movie' or 'tv'
   const isMovie = type.includes('movie'); // check if it's a movie type (discover/movie, movie/upcoming)
   const isTV = type.includes('tv');       // check if it's a TV type (tv/airing_today)
 
   for (const item of items) {
-    // Depending on the type, use the correct release date field
+    // Use 'release_date' for movies, 'first_air_date' for TV shows
     const rawDate = isMovie ? item.release_date : (isTV ? item.first_air_date : null);
+
+    // Log the raw date to check the data
+    console.log(`Raw date for ${item.title || item.name}:`, rawDate);
+
+    // Skip if no valid date exists
+    if (!rawDate) {
+      console.log(`⚠️ Skipping item (no valid date): ${item.title || item.name}`);
+      continue;
+    }
 
     const releaseDate = new Date(`${rawDate}T00:00:00Z`);
 
@@ -41,8 +53,11 @@ async function processItems(items, type) {
     }
 
     try {
+      // Log the item being processed
+      console.log(`Processing ${item.title || item.name} released on ${releaseDate}`);
+
       // Upsert movie or TV show into the database
-      await prisma.release.upsert({
+      const release = await prisma.release.upsert({
         where: { tmdbId: item.id },
         create: {
           tmdbId:      item.id,
@@ -51,28 +66,59 @@ async function processItems(items, type) {
           releaseDate,
           overview:    item.overview,
           posterPath:  item.poster_path,
-          genres:      { connect: item.genre_ids.map(id => ({ tmdbId: id })) },
         },
         update: {
           title:       item.title || item.name,
           releaseDate,
           overview:    item.overview,
           posterPath:  item.poster_path,
-          genres: {
-            set: [],
-            connect: item.genre_ids.map(id => ({ tmdbId: id })),
-          },
         },
       });
+
+      /// Retrieve genreIds from the Genre table based on tmdbId
+      const genreIds = await prisma.genre.findMany({
+        where: {
+          tmdbId: { in: item.genre_ids }  // Match genreIds using tmdbId
+        },
+        select: { id: true }  // Only return the genreId
+      });
+
+      // Create the genre connections for ReleaseGenre
+      const genreConnections = genreIds.map((genre) => ({
+        releaseId: release.id,  // Use the upserted releaseId
+        genreId: genre.id,      // Use the genreId from the Genre table
+      }));
+
+      // First, check if any connections already exist
+      const existingGenreConnections = await prisma.releaseGenre.findMany({
+        where: {
+          releaseId: release.id,
+          genreId: { in: genreConnections.map(gc => gc.genreId) },
+        },
+      });
+
+      // Filter out any existing genre connections
+      const newGenreConnections = genreConnections.filter((gc) => 
+        !existingGenreConnections.some((existing) => existing.genreId === gc.genreId)
+      );
+
+      // Only insert new genre connections
+      if (newGenreConnections.length > 0) {
+        await prisma.releaseGenre.createMany({
+          data: newGenreConnections,
+        });
+        console.log(`🎬 Processed ${item.title || item.name} with ${newGenreConnections.length} new genres.`);
+      } else {
+        console.log(`No new genre connections for ${item.title || item.name}`);
+      }
+
     } catch (error) {
       console.error(`Error processing ${item.title || item.name}:`, error);
     }
   }
+
+  console.log(`✅ Finished processing ${items.length} items for ${type}`);
 }
-
-
-
-
 
 
 
@@ -98,6 +144,7 @@ async function main() {
   console.log('🚀 Seeding process started...');
 
   // 1) Clear old data and upsert genres
+  await prisma.releaseGenre.deleteMany();
   await prisma.release.deleteMany();
   await prisma.genre.deleteMany();
   await upsertGenres('movie');

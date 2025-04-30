@@ -13,25 +13,36 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model Release {
+  id           Int          @id @default(autoincrement())
+  tmdbId       Int          @unique
+  title        String
+  type         ReleaseType
+  releaseDate  DateTime
+  overview     String
+  posterPath   String?
+  genres       ReleaseGenre[]  // Link to genres via the ReleaseGenre join table
+}
+
+model Genre {
+  id          Int          @id @default(autoincrement())
+  tmdbId      Int          @unique
+  name        String
+  releases    ReleaseGenre[]  // Link to releases via the ReleaseGenre join table
+}
+
+model ReleaseGenre {
+  releaseId   Int
+  genreId     Int
+  release     Release  @relation(fields: [releaseId], references: [id]) // Link to Release
+  genre       Genre    @relation(fields: [genreId], references: [id])   // Link to Genre
+
+  @@id([releaseId, genreId])  // Composite primary key
+  @@map("ReleaseGenres")      // Rename the table to ReleaseGenres (without underscore)
+}
+
 enum ReleaseType {
   movie
   tv
 }
 
-model Genre {
-  id       Int       @id @default(autoincrement())
-  tmdbId   Int       @unique
-  name     String
-  releases Release[] @relation("ReleaseGenres")
-}
-
-model Release {
-  id           Int       @id @default(autoincrement())
-  tmdbId       Int       @unique
-  title        String
-  type         ReleaseType
-  releaseDate  DateTime
-  overview     String?
-  posterPath   String?
-  genres       Genre[]   @relation("ReleaseGenres")
-}
