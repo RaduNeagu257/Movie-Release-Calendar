@@ -1,0 +1,24 @@
+{
+  "name": "release-calendar-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "fetch": "node scripts/fetchReleases.js",
+    "start": "node src/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@prisma/client": "^6.6.0",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "node-cron": "^3.0.3",
+    "prisma": "^6.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
