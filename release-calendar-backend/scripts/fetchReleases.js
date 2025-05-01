@@ -25,8 +25,7 @@ async function upsertGenres(type) {
 
 // Process a batch of items into the DB
 async function processItems(items, type) {
-  console.log(`🚀 Processing ${items.length} items for ${type}`);  // log how many items we're processing
-
+  
   // Check if type includes 'movie' or 'tv'
   const isMovie = type.includes('movie'); // check if it's a movie type (discover/movie, movie/upcoming)
   const isTV = type.includes('tv');       // check if it's a TV type (tv/airing_today)
@@ -35,16 +34,13 @@ async function processItems(items, type) {
     // Use 'release_date' for movies, 'first_air_date' for TV shows
     const rawDate = isMovie ? item.release_date : (isTV ? item.first_air_date : null);
 
-    // Log the raw date to check the data
-    console.log(`Raw date for ${item.title || item.name}:`, rawDate);
-
     // Skip if no valid date exists
     if (!rawDate) {
       console.log(`⚠️ Skipping item (no valid date): ${item.title || item.name}`);
       continue;
     }
 
-    const releaseDate = new Date(`${rawDate}T00:00:00Z`);
+    const releaseDate = new Date(rawDate);
 
     // Check if the date is valid
     if (isNaN(releaseDate)) {
@@ -128,11 +124,16 @@ async function fetchAndStore(type, params) {
   let page = 1, totalPages = 1;
   console.log(`📅 Fetching ${type} with filters:`, params);
 
+  let totalResults = 0;
   while (page <= totalPages) {
     const { data } = await TMDB.get(`/${type}`, {
       params: { ...params, page },
     });
     totalPages = data.total_pages;
+    if (totalResults === 0) {
+      totalResults = data.total_results;
+      console.log(`📊 Total results: ${totalResults}`);
+    }
     await processItems(data.results, type);
     console.log(`✅ Processed page ${page}/${totalPages} for ${type}`);
     page++;
