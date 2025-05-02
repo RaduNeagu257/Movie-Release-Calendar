@@ -5,9 +5,15 @@ const cron    = require('node-cron');
 const { spawn } = require('child_process');
 const { PrismaClient } = require('@prisma/client');
 const { parse } = require('path');
+const cors = require('cors');
 
 const prisma = new PrismaClient();
 const app    = express();
+app.use(
+  cors({
+    origin: 'http://localhost:3000',             // or '*' for wide-open during dev
+  })
+);
 app.use(express.json());
 
 // Cron: nightly refresh
@@ -115,34 +121,101 @@ app.get('/releases', async (req, res) => {
   }
 });
 
-
-
-
-// GET /releaseGenre?releaseId=1&genreId=2
+// GET /releaseGenre?
+//   releaseId=1
+//   &genreId=2
+//   &id=71547
+//   &title=Fantasia
+//   &releaseDate=2000-01-01
+//   &type=movie
 app.get('/releaseGenre', async (req, res) => {
   try {
-    const { releaseId, genreId } = req.query;
+    const {
+      releaseId,
+      genreId,
+      id,          // filters on Release.id
+      title,
+      releaseDate, // YYYY or YYYY-MM or YYYY-MM-DD
+      type,
+    } = req.query;
 
+    // 1) Build the top-level pivot filters
     const where = {};
+    if (releaseId) {
+      where.releaseId = parseInt(releaseId, 10);
+      console.log(`Filtering pivot by releaseId: ${where.releaseId}`);
+    }
+    if (genreId) {
+      where.genreId = parseInt(genreId, 10);
+      console.log(`Filtering pivot by genreId: ${where.genreId}`);
+    }
 
-    if (releaseId) where.releaseId = parseInt(releaseId, 10);  // Filter by releaseId if provided
-    if (genreId) where.genreId = parseInt(genreId, 10);  // Filter by genreId if provided
+    // 2) Build any nested filters on the related Release
+    const releaseFilter = {};
+    if (id) {
+      releaseFilter.id = parseInt(id, 10);
+      console.log(`Filtering release by id: ${releaseFilter.id}`);
+    }
+    if (title) {
+      releaseFilter.title = { contains: title, mode: 'insensitive' };
+      console.log(`Filtering release by title: ${title}`);
+    }
+    if (type) {
+      releaseFilter.type = type;
+      console.log(`Filtering release by type: ${type}`);
+    }
+    if (releaseDate) {
+      const parts = releaseDate.split('-').map(p => parseInt(p, 10));
+      const year  = parts[0];
+      const month = parts[1];
+      const day   = parts[2];
+      let gte, lt;
 
-    // Fetch the release-genre associations from ReleaseGenre
-    const releaseGenres = await prisma.releaseGenre.findMany({
+      if (day) {
+        // exact day
+        gte = new Date(year, month - 1, day);
+        lt  = new Date(year, month - 1, day + 1);
+        console.log(`Filtering release by exact date: gte=${gte} lt=${lt}`);
+      } else if (month) {
+        // whole month
+        gte = new Date(year, month - 1, 1);
+        lt  = new Date(year, month, 1);
+        console.log(`Filtering release by month: gte=${gte} lt=${lt}`);
+      } else {
+        // whole year
+        gte = new Date(year, 0, 1);
+        lt  = new Date(year + 1, 0, 1);
+        console.log(`Filtering release by year: gte=${gte} lt=${lt}`);
+      }
+
+      releaseFilter.releaseDate = { gte, lt };
+    }
+
+    // If we have any release-level filters, attach them under `release.is`
+    if (Object.keys(releaseFilter).length > 0) {
+      where.release = { is: releaseFilter };
+    }
+
+    // 3) Fetch via Prisma
+    const list = await prisma.releaseGenre.findMany({
       where,
       include: {
-        release: true,  // Include the release data (title, release date, etc.)
-        genre: true,    // Include the genre data (name, tmdbId, etc.)
+        release: true,
+        genre:   true,
       },
+      orderBy: {
+        release: { releaseDate: 'asc' }
+      }
     });
 
-    res.json(releaseGenres);  // Return all release-genre associations
+    res.json(list);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch release genres.' });
+    res.status(500).json({ error: 'Failed to fetch release-genre associations.' });
   }
 });
+
+
 
 
 

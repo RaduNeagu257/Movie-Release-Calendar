@@ -9,6 +9,7 @@ interface Release {
   releaseDate: string
   type: 'movie' | 'tv'
   genres: Genre[]
+  dateOnly: string
 }
 
 const Calendar = dynamic(() => import('../components/Calendar'), { ssr: false })
@@ -32,23 +33,69 @@ export default function Home() {
 
   // 2. Load releases whenever filters change
   useEffect(() => {
-    const params: Record<string, any> = {}
-    if (typeFilter)  params.type    = typeFilter
-    if (genreFilter) params.genreId = genreFilter
-
-    axios.get<Release[]>(`${API}/releases`, { params })
+    // 1) Build the same params object
+    const params: Record<string, any> = {};
+    if (typeFilter)  params.type    = typeFilter;
+    if (genreFilter) params.genreId = genreFilter;
+  
+    // 2) Fetch from the pivot endpoint
+    axios.get(`${API}/releaseGenre`, { params })
       .then(res => {
-        setReleases(res.data)
-        setEvents(res.data.map(r => ({
+        const items: Array<{
+          release: {
+            id: number;
+            title: string;
+            releaseDate: string;
+            type: 'movie'|'tv';
+          };
+          genre: { tmdbId: number; name: string };
+        }> = res.data;
+  
+        // 3) Group by release.id
+        const map = new Map<number, {
+          id: number;
+          title: string;
+          releaseDate: string;
+          dateOnly: string;
+          type: 'movie'|'tv';
+          genres: { tmdbId: number; name: string }[];
+        }>();
+  
+        items.forEach(({ release, genre }) => {
+          const { id, title, releaseDate, type } = release;
+          if (!map.has(id)) {
+            map.set(id, {
+              id,
+              title,
+              releaseDate,
+              dateOnly: releaseDate.split('T')[0],
+              type,
+              genres: []
+            });
+          }
+          map.get(id)!.genres.push(genre);
+        });
+  
+        // 4) Turn the map into an array
+        const normalized = Array.from(map.values());
+  
+        // 5) Update state
+        setReleases(normalized);
+        setEvents(normalized.map(r => ({
           title: r.title,
-          date: r.releaseDate
-        })))
+          date:  r.dateOnly
+        })));
       })
-      .catch(console.error)
-  }, [typeFilter, genreFilter])
+      .catch(console.error);
+  }, [typeFilter, genreFilter]);
+  
 
   // 3. Filter releases for the clicked day
-  const dayList = releases.filter(r => r.releaseDate === selectedDate)
+  const dayList = releases
+    .filter(r => r.dateOnly === selectedDate)
+    .sort((a, b) => a.title.localeCompare(b.title))
+
+
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
