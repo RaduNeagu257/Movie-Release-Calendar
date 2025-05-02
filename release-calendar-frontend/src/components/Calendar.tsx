@@ -13,24 +13,21 @@ const Calendar: React.FC<CalendarProps> = ({ events, onDateClick }) => {
   const calendarRef = useRef<FullCalendar | null>(null)
 
   return (
-    <div className="p-4 bg-white rounded-2xl shadow">
+    <div className="p-4 bg-gray-panel border border-gray-700 rounded-2xl shadow-inner">
       <FullCalendar
-        // 2) Attach the ref here
         ref={calendarRef}
 
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
         events={events}
-
         dateClick={info => onDateClick(info.dateStr)}
-
+        eventColor="#7e22ce" // purple-700
         headerToolbar={{
-          left: 'prev,next myToday',  // drop the built-in 'today'
+          left: 'prev,next myToday',
           center: 'title',
           right: ''
         }}
 
-        // 3) Define a custom 'myToday' button that both moves the view AND fires your callback
         customButtons={{
           myToday: {
             text: 'today',
@@ -48,7 +45,9 @@ const Calendar: React.FC<CalendarProps> = ({ events, onDateClick }) => {
             }
           }
         }}
-
+        dayHeaderContent={d => (
+          <span className="text-gray-400 dark:text-gray-500">{d.text}</span>
+        )}
         height="auto"
       />
     </div>

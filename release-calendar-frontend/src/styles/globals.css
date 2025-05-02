@@ -2,29 +2,88 @@
 @tailwind components;
 @tailwind utilities;
 
-
+/* — your CSS variables & light/dark body — */
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
 }
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* — FullCalendar dark-purple overrides — */
+
+/* 1) Darken the outer wrapper & scrollgrid */
+.fc,
+.fc .fc-scrollgrid,
+.fc .fc-scrollgrid > .fc-scrollgrid-section > table {
+  background-color: #2e2e2e !important;   /* your gray-panel */
+  border: 1px solid #3d3d3d !important;    /* grid outline */
+}
+
+/* 2) Darken the days-of-week header bar */
+.fc .fc-scrollgrid > .fc-scrollgrid-section:first-child > table > thead > tr,
+.fc .fc-col-header,    /* FullCalendar sometimes wraps in .fc-col-header */
+.fc .fc-colheader {    /* v6 shorthand container */
+  background-color: #2e2e2e !important;
+}
+
+/* 3) Darken each header cell and force white text */
+.fc .fc-col-header-cell,
+.fc .fc-colheader-cell,
+.fc .fc-daygrid-col-header-cell {
+  background-color: #2e2e2e !important;
+  border: none !important;
+}
+.fc .fc-col-header-cell-cushion,
+.fc .fc-colheader-cell-cushion,
+.fc .fc-daygrid-col-header-cell .fc-col-header-cell-cushion {
+  color: #ffffff !important;              /* white text for Sun, Mon, … */
+}
+
+/* 4) Darken each day cell & keep grid lines */
+.fc .fc-daygrid-day-frame {
+  background-color: #2e2e2e !important;
+  border-color: #3d3d3d !important;
+}
+.fc .fc-daygrid-day-frame:hover {
+  background-color: #3d3d3d !important;
+}
+
+/* 5) Style the toolbar (month/year + buttons) */
+.fc .fc-toolbar,
+.fc .fc-toolbar-chunk {
+  background-color: #1f1f1f !important;
+}
+.fc .fc-toolbar-title {
+  color: #ffffff !important;              /* month/year in white */
+}
+.fc .fc-button {
+  background-color: #1f1f1f !important;
+  color:            #e5e7eb !important;
+  border:           none       !important;
+  box-shadow:       none       !important;
+}
+.fc .fc-button:enabled:hover {
+  background-color: #5b21b6 !important;   /* your purple-dark */
+  color:            #ffffff  !important;
+}
+
+/* 6) Event pills—keep purple + white text */
+.fc .fc-daygrid-event {
+  background-color: #7e22ce !important;   /* your purple-primary */
+  color:            #ffffff  !important;
+  border:           none     !important;
+}
+.fc .fc-col-header-cell-cushion > span {
+  color: #ffffff !important;
 }
 

@@ -98,15 +98,16 @@ export default function Home() {
 
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <h1 className="text-3xl font-bold mb-4">Release Calendar</h1>
+    <div className="min-h-screen p-6 bg-gray-900 text-gray-100">
+    <h1 className="text-3xl font-bold mb-4 text-purple-primary">Release Calendar</h1>
 
       {/* Filters */}
       <div className="flex space-x-4 mb-6">
         <select
           value={typeFilter}
           onChange={e => setTypeFilter(e.target.value as any)}
-          className="p-2 border rounded"
+          className="p-2 border border-gray-700 bg-gray-800 text-gray-200 rounded"
+
         >
           <option value="">All types</option>
           <option value="movie">Movie</option>
@@ -116,7 +117,8 @@ export default function Home() {
         <select
           value={genreFilter}
           onChange={e => setGenreFilter(Number(e.target.value) || '')}
-          className="p-2 border rounded"
+          className="p-2 border border-gray-700 bg-gray-800 text-gray-200 rounded"
+
         >
           <option value="">All genres</option>
           {genres.map(g => (
@@ -134,16 +136,17 @@ export default function Home() {
           />
         </div>
 
-        <aside className="bg-white p-4 rounded-2xl shadow">
-          <h2 className="text-xl mb-2">
+        <aside className="bg-gray-panel p-4 rounded-2xl shadow-inner">
+          <h2 className="text-xl mb-2 text-purple-primary">
             {selectedDate || 'Select a date'}
           </h2>
           {selectedDate && dayList.length === 0 && <p>No releases.</p>}
           <ul className="space-y-2">
             {dayList.map(r => (
-              <li key={r.id} className="p-2 border rounded">
-                <strong>{r.title}</strong> ({r.type})
-                <div className="text-sm text-gray-600">
+              <li key={r.id} className="p-2 border border-gray-700 rounded bg-gray-800 hover:bg-purple-dark transition">
+                <strong className="text-white">{r.title}</strong>{' '}
+                <span className="text-purple-primary">({r.type})</span>
+                <div className="text-sm text-gray-400">
                   {r.genres.map(g => g.name).join(', ')}
                 </div>
               </li>
