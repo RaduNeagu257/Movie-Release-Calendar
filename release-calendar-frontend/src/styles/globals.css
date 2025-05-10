@@ -87,3 +87,43 @@ body {
   color: #ffffff !important;
 }
 
+
+/* Form input fields and labels */
+input,
+select,
+textarea {
+  background-color: #2e2e2e;     /* Dark background for input fields */
+  color: #ffffff;                /* White text */
+  border: 1px solid #3d3d3d;     /* Slightly lighter border */
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #7e22ce;         /* Purple border on focus */
+  outline: none;
+}
+
+/* Form labels */
+label {
+  color: #ffffff;                /* White label text */
+}
+
+/* Button styling */
+button {
+  background-color: #7e22ce;     /* Purple button */
+  color: #ffffff;                /* White text */
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #5b21b6;     /* Darker purple on hover */
+}
+
+/* Optional: add spacing between form elements */
+form > div {
+  margin-bottom: 1rem;
+}

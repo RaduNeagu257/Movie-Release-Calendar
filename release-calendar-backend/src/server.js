@@ -6,6 +6,8 @@ const { spawn } = require('child_process');
 const { PrismaClient } = require('@prisma/client');
 const { parse } = require('path');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const prisma = new PrismaClient();
 const app    = express();
@@ -217,9 +219,82 @@ app.get('/releaseGenre', async (req, res) => {
 
 
 
+// Hash the password using bcrypt
+const hashPassword = async (password) => {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salt);
+};
 
+// Compare a plain text password with a hashed password
+const comparePasswords = async (password, hashedPassword) => {
+  return bcrypt.compare(password, hashedPassword);
+};
 
+// POST /register
+app.post('/register', async (req, res) => {
+  console.log('Registering user...');
+  const { email, password } = req.body;
 
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  try {
+    // Check if the user already exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already in use.' });
+    }
+
+    // Hash the password
+    const hashedPassword = await hashPassword(password);
+
+    // Create a new user
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+      },
+    });
+
+    res.status(201).json({ message: 'User registered successfully', user: newUser });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /login
+app.post('/login', async (req, res) => {
+  console.log('Logging in user...');
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  try {
+    // Check if user exists
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
+    // Compare the provided password with the stored hash
+    const isValid = await comparePasswords(password, user.password);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
+    // If login is successful, return user data (or set session cookies)
+    const token = jwt.sign({ userId: user.id }, 'your_jwt_secret', { expiresIn: '1h' });
+    res.status(200).json({ message: 'Login successful', token });
+    //res.status(200).json({ message: 'Login successful', user: { email: user.email, id: user.id } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 
 

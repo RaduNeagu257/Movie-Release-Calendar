@@ -2,6 +2,8 @@ import React, { useRef } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
+import { useEffect } from 'react'
+import { useRouter } from 'next/router'
 
 interface CalendarProps {
   events: { title: string; date: string }[]
@@ -9,8 +11,16 @@ interface CalendarProps {
 }
 
 const Calendar: React.FC<CalendarProps> = ({ events, onDateClick }) => {
-  // 1) Create the ref, initially null
   const calendarRef = useRef<FullCalendar | null>(null)
+  const router = useRouter()
+
+  // 1) Redirect to login if not authenticated
+  // useEffect(() => {
+  //   const token = localStorage.getItem('token') // or use cookies for more security
+  //   if (!token) {
+  //     router.push('/login') // redirect to login page if no token
+  //   }
+  // }, [router])
 
   return (
     <div className="p-4 bg-gray-panel border border-gray-700 rounded-2xl shadow-inner">

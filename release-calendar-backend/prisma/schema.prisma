@@ -46,3 +46,9 @@ enum ReleaseType {
   tv
 }
 
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String   // This will be a hashed password
+  createdAt DateTime @default(now())
+}
