@@ -8,7 +8,7 @@ const { parse } = require('path');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
+const JWT_SECRET = process.env.JWT_SECRET;
 const prisma = new PrismaClient();
 const app    = express();
 app.use(
@@ -17,6 +17,22 @@ app.use(
   })
 );
 app.use(express.json());
+const authMiddleware = (req, res, next) => {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+
+  const token = auth.slice(7); // remove "Bearer "
+  try {
+    const { userId } = jwt.verify(token, JWT_SECRET);
+    req.userId = userId;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+app.use('/watchlist', authMiddleware);
 
 // Cron: nightly refresh
 cron.schedule('30 0 * * *', () => {
@@ -287,7 +303,7 @@ app.post('/login', async (req, res) => {
     }
 
     // If login is successful, return user data (or set session cookies)
-    const token = jwt.sign({ userId: user.id }, 'your_jwt_secret', { expiresIn: '1h' });
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.status(200).json({ message: 'Login successful', token });
     //res.status(200).json({ message: 'Login successful', user: { email: user.email, id: user.id } });
   } catch (error) {
@@ -297,6 +313,161 @@ app.post('/login', async (req, res) => {
 });
 
 
+// GET /watchlist
+// Returns all Release records in the current user's watchlist
+// ── In src/server.js (replace your old GET /watchlist) ──
+
+// ── GET /watchlist ──
+app.get('/watchlist', async (req, res) => {
+  try {
+    // 1) Get each pivot row (releaseId, watched, rating) for this user, in descending order by createdAt
+    const entries = await prisma.watchlist.findMany({
+      where: { userId: req.userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        releaseId: true,
+        watched:   true,
+        rating:    true
+      }
+    });
+
+    // 2) For each watched pivot, fetch Release + its genres
+    const result = await Promise.all(
+      entries.map(async (entry) => {
+        // 2a) Fetch core release fields
+        const r = await prisma.release.findUnique({
+          where: { id: entry.releaseId },
+          select: {
+            id:          true,
+            title:       true,
+            releaseDate: true,
+            type:        true,
+            posterPath:  true
+          }
+        });
+        // 2b) Fetch all genres for that release via the pivot
+        const pivotRows = await prisma.releaseGenre.findMany({
+          where: { releaseId: entry.releaseId },
+          include: { genre: true }
+        });
+        const genres = pivotRows.map(rg => ({
+          id:   rg.genre.id,
+          name: rg.genre.name
+        }));
+
+        return {
+          id:          r.id,
+          title:       r.title,
+          releaseDate: r.releaseDate,
+          type:        r.type,
+          posterPath:  r.posterPath,
+          watched:     entry.watched,
+          rating:      entry.rating,
+          genres
+        };
+      })
+    );
+
+    // 3) Return that combined array
+    res.json(result);
+  } catch (err) {
+    console.error('GET /watchlist error:', err);
+    res.status(500).json({ error: 'Unable to fetch watchlist' });
+  }
+});
+
+
+
+// ── POST /watchlist ──
+// Body: { releaseId: number, watched?: boolean, rating?: number }
+app.post('/watchlist', async (req, res) => {
+  const { releaseId, watched = false, rating = null } = req.body;
+  if (!releaseId) {
+    return res.status(400).json({ error: 'releaseId is required' });
+  }
+  try {
+    const entry = await prisma.watchlist.create({
+      data: {
+        userId:    req.userId,
+        releaseId: parseInt(releaseId, 10),
+        watched,
+        rating
+      }
+    });
+    res.status(201).json(entry);
+  } catch (err) {
+    console.error('POST /watchlist error:', err);
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'Already in watchlist' });
+    }
+    res.status(500).json({ error: 'Unable to add to watchlist' });
+  }
+});
+
+// ── PATCH /watchlist/:releaseId ──
+// Body: { watched: boolean }
+// Toggles the `watched` field on an existing watchlist entry
+
+app.patch('/watchlist/:releaseId', async (req, res) => {
+  const releaseId = parseInt(req.params.releaseId, 10)
+  const { watched, rating } = req.body
+  // rating might be undefined, or "LIKE", or "DISLIKE"
+
+  console.log("rating:", rating);
+  // Build a dynamic "data" object:
+  const dataToUpdate = {}
+  if (typeof watched === 'boolean') {
+    dataToUpdate.watched = watched
+  }
+  if (rating === 'LIKE' || rating === 'DISLIKE' || rating === null) {
+    dataToUpdate.rating = rating
+  }
+
+  // If neither field is present, return 400:
+  if (Object.keys(dataToUpdate).length === 0) {
+    return res.status(400).json({ error: 'Nothing to update. Provide watched or rating.' })
+  }
+
+  try {
+    const updated = await prisma.watchlist.update({
+      where: {
+        userId_releaseId: {
+          userId:    req.userId,
+          releaseId
+        }
+      },
+      data: dataToUpdate
+    })
+    res.json(updated)
+  } catch (err) {
+    console.error('PATCH /watchlist error:', err)
+    res.status(500).json({ error: 'Unable to update watchlist' })
+  }
+})
+
+
+// DELETE /watchlist/:releaseId
+// Removes that release from the user's watchlist
+app.delete('/watchlist/:releaseId', async (req, res) => {
+  const releaseId = parseInt(req.params.releaseId, 10);
+  if (!releaseId) {
+    return res.status(400).json({ error: 'Invalid releaseId' });
+  }
+  try {
+    await prisma.watchlist.delete({
+      where: {
+        userId_releaseId: {
+          userId:    req.userId,
+          releaseId,
+        }
+      }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /watchlist error:', err);
+    res.status(500).json({ error: 'Unable to remove from watchlist' });
+  }
+});
 
 // Start server
 const port = process.env.PORT || 3001;

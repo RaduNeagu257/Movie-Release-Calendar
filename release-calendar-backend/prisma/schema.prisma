@@ -22,6 +22,7 @@ model Release {
   overview     String
   posterPath   String?
   genres       ReleaseGenre[]  // Link to genres via the ReleaseGenre join table
+  watchlistedBy Watchlist[]
 }
 
 model Genre {
@@ -49,6 +50,27 @@ enum ReleaseType {
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
-  password  String   // This will be a hashed password
+  password  String
   createdAt DateTime @default(now())
+  watchlist  Watchlist[]
+}
+
+enum Rating {
+  LIKE
+  DISLIKE
+}
+
+model Watchlist {
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  release   Release  @relation(fields: [releaseId], references: [id])
+  releaseId Int
+
+  watched   Boolean  @default(false)
+  rating    Rating?     // Nullable by default
+
+  createdAt DateTime @default(now())
+
+  @@id([userId, releaseId])
+  @@map("Watchlists")
 }
