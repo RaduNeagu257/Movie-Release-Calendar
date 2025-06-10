@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 const app    = express();
 app.use(
   cors({
-    origin: 'http://localhost:3000',             // or '*' for wide-open during dev
+    origin: `${process.env.BASE_URL}:${process.env.FRONTEND_PORT}`,
   })
 );
 app.use(express.json());
@@ -54,7 +54,12 @@ app.get('/genres', async (req, res) => {
 // GET /releases?id=1&title=Movie Title&releaseDate=2002-04-01&type=movie
 app.get('/releases', async (req, res) => {
   try {
-    const { id, title, releaseDate, type } = req.query;
+    const { 
+      id,
+      title,
+      releaseDate, 
+      type 
+    } = req.query;
 
     // Construct the 'where' filter dynamically
     const where = {};
@@ -139,13 +144,7 @@ app.get('/releases', async (req, res) => {
   }
 });
 
-// GET /releaseGenre?
-//   releaseId=1
-//   &genreId=2
-//   &id=71547
-//   &title=Fantasia
-//   &releaseDate=2000-01-01
-//   &type=movie
+// GET /releaseGenre?releaseId=1&genreId=2&id=71547&title=Fantasia&releaseDate=2000-01-01&type=movie
 app.get('/releaseGenre', async (req, res) => {
   try {
     const {
@@ -249,7 +248,10 @@ const comparePasswords = async (password, hashedPassword) => {
 // POST /register
 app.post('/register', async (req, res) => {
   console.log('Registering user...');
-  const { email, password } = req.body;
+  const {
+    email, 
+    password 
+  } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
@@ -283,7 +285,10 @@ app.post('/register', async (req, res) => {
 // POST /login
 app.post('/login', async (req, res) => {
   console.log('Logging in user...');
-  const { email, password } = req.body;
+  const {
+    email, 
+    password 
+  } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
@@ -313,11 +318,7 @@ app.post('/login', async (req, res) => {
 });
 
 
-// GET /watchlist
-// Returns all Release records in the current user's watchlist
-// ── In src/server.js (replace your old GET /watchlist) ──
-
-// ── GET /watchlist ──
+//GET /watchlist
 app.get('/watchlist', async (req, res) => {
   try {
     // 1) Get each pivot row (releaseId, watched, rating) for this user, in descending order by createdAt
@@ -381,7 +382,11 @@ app.get('/watchlist', async (req, res) => {
 // ── POST /watchlist ──
 // Body: { releaseId: number, watched?: boolean, rating?: number }
 app.post('/watchlist', async (req, res) => {
-  const { releaseId, watched = false, rating = null } = req.body;
+  const {
+    releaseId, 
+    watched = false, 
+    rating = null 
+  } = req.body;
   if (!releaseId) {
     return res.status(400).json({ error: 'releaseId is required' });
   }
@@ -406,11 +411,12 @@ app.post('/watchlist', async (req, res) => {
 
 // ── PATCH /watchlist/:releaseId ──
 // Body: { watched: boolean }
-// Toggles the `watched` field on an existing watchlist entry
-
 app.patch('/watchlist/:releaseId', async (req, res) => {
   const releaseId = parseInt(req.params.releaseId, 10)
-  const { watched, rating } = req.body
+  const { 
+    watched, 
+    rating 
+  } = req.body
   // rating might be undefined, or "LIKE", or "DISLIKE"
 
   console.log("rating:", rating);
@@ -447,7 +453,6 @@ app.patch('/watchlist/:releaseId', async (req, res) => {
 
 
 // DELETE /watchlist/:releaseId
-// Removes that release from the user's watchlist
 app.delete('/watchlist/:releaseId', async (req, res) => {
   const releaseId = parseInt(req.params.releaseId, 10);
   if (!releaseId) {
@@ -469,8 +474,86 @@ app.delete('/watchlist/:releaseId', async (req, res) => {
   }
 });
 
+// GET /user/preferences
+app.get('/user/preferences', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId
+
+    // Fetch the user’s “preferencesCompleted” flag
+    // and all preferred‐genre join rows
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        preferencesCompleted: true,
+        preferredGenres: {
+          select: { genreId: true }
+        }
+      }
+    })
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const genreIds = user.preferredGenres.map(pg => pg.genreId)
+    res.json({
+      preferencesCompleted: user.preferencesCompleted,
+      genreIds
+    })
+  } catch (err) {
+    console.error('GET /user/preferences error:', err)
+    res.status(500).json({ error: 'Failed to fetch preferences' })
+  }
+})
+
+
+// POST /user/preferences
+app.post('/user/preferences', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId
+    const { 
+      genreIds 
+    } = req.body
+
+    if (!Array.isArray(genreIds)) {
+      return res.status(400).json({ error: 'genreIds must be an array of numbers' })
+    }
+
+    // 1) Delete all existing preferences for this user
+    await prisma.userPreferredGenre.deleteMany({
+      where: { userId }
+    })
+
+    // 2) Bulk‐create the new ones (skipDuplicates just in case)
+    if (genreIds.length > 0) {
+      const createData = genreIds.map((gid) => ({ userId, genreId: gid }))
+      await prisma.userPreferredGenre.createMany({
+        data: createData,
+        skipDuplicates: true
+      })
+    }
+
+    // 3) Mark preferencesCompleted = true
+    await prisma.user.update({
+      where: { id: userId },
+      data: { preferencesCompleted: true }
+    })
+
+    // 4) Return the updated prefs
+    res.json({
+      preferencesCompleted: true,
+      genreIds
+    })
+  } catch (err) {
+    console.error('POST /user/preferences error:', err)
+    res.status(500).json({ error: 'Failed to update preferences' })
+  }
+})
+
+
+
 // Start server
-const port = process.env.PORT || 3001;
+const port = process.env.BACKEND_PORT;
 app.listen(port, () => {
-  console.log(`🚀 API listening on http://localhost:${port}`);
+  console.log(`🚀 API listening on ${process.env.BASE_URL}:${port}`);
 });

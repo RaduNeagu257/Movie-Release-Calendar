@@ -30,6 +30,7 @@ model Genre {
   tmdbId      Int          @unique
   name        String
   releases    ReleaseGenre[]  // Link to releases via the ReleaseGenre join table
+  preferredBy   UserPreferredGenre[]
 }
 
 model ReleaseGenre {
@@ -53,6 +54,19 @@ model User {
   password  String
   createdAt DateTime @default(now())
   watchlist  Watchlist[]
+  preferencesCompleted   Boolean               @default(false)
+  preferredGenres        UserPreferredGenre[]
+}
+
+model UserPreferredGenre {
+  userId    Int
+  genreId   Int
+
+  user      User    @relation(fields: [userId],   references: [id])
+  genre     Genre   @relation(fields: [genreId],  references: [id])
+
+  @@id([userId, genreId])
+  @@map("UserPreferredGenres")
 }
 
 enum Rating {

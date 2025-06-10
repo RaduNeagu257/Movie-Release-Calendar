@@ -71,7 +71,10 @@ export default function Home() {
       })
         .then(async (res) => {
           if (res.status === 401) {
-            router.push('/login')
+            // Prevent redirection if on the home page
+            if (router.pathname !== '/') {
+              router.push('/login')
+            }
             return []
           }
           if (!res.ok) {
@@ -284,6 +287,14 @@ export default function Home() {
           {dropdownOpen && (
             <div className="absolute right-0 mt-2 bg-gray-800 text-white rounded shadow-lg w-48">
               <ul>
+                <li>
+                  <button
+                    onClick={() => router.push('/recommended')}
+                    className="block w-full text-left px-4 py-2 text-sm hover:bg-purple-dark"
+                  >
+                    Recommended
+                  </button>
+                </li>
                 <li>
                   <button
                     onClick={() => router.push('/watchlist')}

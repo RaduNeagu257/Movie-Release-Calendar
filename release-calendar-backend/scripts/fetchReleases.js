@@ -142,7 +142,7 @@ async function fetchAndStore(type, params) {
 
 // Main execution
 async function main() {
-  console.log('🚀 Seeding process started...');
+  console.log(' Seeding process started...');
 
   // 1) Clear old data and upsert genres
   await prisma.releaseGenre.deleteMany();
@@ -171,7 +171,7 @@ async function main() {
   // 4) Fetch and seed TV shows airing today
   await fetchAndStore('tv/airing_today', { language: 'en-US' });
 
-  console.log('🎉 All releases up to 2025 have been seeded.');
+  console.log(' All releases up to 2025 have been seeded.');
   await prisma.$disconnect();
 }
 

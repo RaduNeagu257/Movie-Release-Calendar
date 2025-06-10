@@ -14,14 +14,6 @@ const Calendar: React.FC<CalendarProps> = ({ events, onDateClick }) => {
   const calendarRef = useRef<FullCalendar | null>(null)
   const router = useRouter()
 
-  // 1) Redirect to login if not authenticated
-  // useEffect(() => {
-  //   const token = localStorage.getItem('token') // or use cookies for more security
-  //   if (!token) {
-  //     router.push('/login') // redirect to login page if no token
-  //   }
-  // }, [router])
-
   return (
     <div className="p-4 bg-gray-panel border border-gray-700 rounded-2xl shadow-inner">
       <FullCalendar
@@ -63,5 +55,4 @@ const Calendar: React.FC<CalendarProps> = ({ events, onDateClick }) => {
     </div>
   )
 }
-
 export default Calendar
