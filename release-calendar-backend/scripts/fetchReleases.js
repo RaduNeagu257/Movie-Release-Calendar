@@ -142,30 +142,42 @@ async function fetchAndStore(type, params) {
   await processItems(allItems, type);
 }
 
-// Fetch releases for a specific year
+// Fetch releases for a specific year, broken into three parts
 async function fetchReleasesForYear(year, type) {
-  let params = {
-    include_adult: false,
-    include_video: false,
-    language: 'en-US',
-    sort_by: 'popularity.desc',
-    with_original_language: 'en',
-  };
+  const periods = [
+    { start: `${year}-01-01`, end: `${year}-03-31` },
+    { start: `${year}-04-01`, end: `${year}-06-30` },
+    { start: `${year}-07-01`, end: `${year}-09-30` },
+    { start: `${year}-10-01`, end: `${year}-12-31` },
+  ];
 
-  if (type.includes('movie')) {
-    // For Movies, use primary_release_date filters
-    params['primary_release_date.gte'] = `${year}-01-01`;
-    params['primary_release_date.lte'] = `${year}-12-31`;
-  } else if (type.includes('tv')) {
-    // For TV Shows, use first_air_date filters
-    params['first_air_date.gte'] = `${year}-01-01`;
-    params['first_air_date.lte'] = `${year}-12-31`;
-    params['first_air_date_year'] = year; // To filter by year of the first air date
+  // For each period (third of the year), make a request
+  for (const period of periods) {
+    let params = {
+      include_adult: false,
+      include_video: false,
+      language: 'en-US',
+      sort_by: 'popularity.desc',
+      with_original_language: 'en',
+    };
+
+    if (type.includes('movie')) {
+      // For Movies, use primary_release_date filters
+      params['primary_release_date.gte'] = period.start;
+      params['primary_release_date.lte'] = period.end;
+    } else if (type.includes('tv')) {
+      // For TV Shows, use first_air_date filters
+      params['first_air_date.gte'] = period.start;
+      params['first_air_date.lte'] = period.end;
+      params['first_air_date_year'] = year; // To filter by the year of the first air date
+    }
+
+    // Fetch and store data for movies or TV shows for the current period
+    await fetchAndStore(type, params);
+    console.log(`✅ Finished fetching and processing releases for ${period.start} to ${period.end} (${type})`);
   }
-
-  await fetchAndStore(type, params);
-  console.log(`✅ Finished fetching and processing releases for ${year} (${type})`);
 }
+
 
 // Main execution
 async function main() {
@@ -190,7 +202,7 @@ async function main() {
 
   for (const type of types) {
     // Fetch for each year and both movie and TV show types
-    //await fetchReleasesForYear(previousYear, type);  // Previous year
+    await fetchReleasesForYear(previousYear, type);  // Previous year
     await fetchReleasesForYear(currentYear, type);   // Current year
     await fetchReleasesForYear(nextYear, type);      // Next year
   }
