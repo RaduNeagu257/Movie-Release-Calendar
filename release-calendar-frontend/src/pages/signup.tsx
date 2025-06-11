@@ -9,7 +9,7 @@ const SignupPage: React.FC = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
-    const API = process.env.NEXT_PUBLIC_API_URL
+    const API = `${process.env.NEXT_PUBLIC_BASE_URL}:${process.env.NEXT_PUBLIC_BACKEND_PORT}`;
 
     const registerResponse = await fetch(`${API}/register`, {
       method: 'POST',

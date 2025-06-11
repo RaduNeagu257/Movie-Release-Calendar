@@ -55,7 +55,7 @@ export default function Home() {
   // WATCHLIST entries contain { id, watched, rating }
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([])
 
-  const API = process.env.NEXT_PUBLIC_API_URL!
+  const API = `${process.env.NEXT_PUBLIC_BASE_URL}:${process.env.NEXT_PUBLIC_BACKEND_PORT}`;
   const router = useRouter()
 
   // ─── On mount: check auth, load genres, fetch watchlist ───
@@ -254,7 +254,8 @@ export default function Home() {
     localStorage.removeItem('token')
     localStorage.removeItem('email')
     setIsAuthenticated(false)
-    router.push('/')
+    handleDropdownToggle()
+    setWatchlist([]) // Clear watchlist on sign out
   }
   const handleDropdownToggle = () => setDropdownOpen((o) => !o)
 

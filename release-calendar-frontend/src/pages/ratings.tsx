@@ -1,4 +1,4 @@
-// ── src/pages/watchlist.tsx ──
+// ── src/pages/ratings.tsx ──
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
@@ -14,31 +14,31 @@ import {
 } from '@fortawesome/free-regular-svg-icons'
 
 interface Genre {
-  id:     number
-  name:   string
+  id: number
+  name: string
 }
 
 type RatingValue = 'LIKE' | 'DISLIKE' | null
 
 interface WatchlistRelease {
-  id:           number
-  title:        string
-  releaseDate:  string
-  type:         'movie' | 'tv'
-  posterPath:   string | null
-  genres:       Genre[]
-  watched:      boolean
-  rating:       RatingValue
+  id: number
+  title: string
+  releaseDate: string
+  type: 'movie' | 'tv'
+  posterPath: string | null
+  genres: Genre[]
+  watched: boolean
+  rating: RatingValue
 }
 
-export default function WatchlistPage() {
-  const [watchlist, setWatchlist] = useState<WatchlistRelease[]>([])
+export default function RatingsPage() {
+  const [ratings, setRatings] = useState<WatchlistRelease[]>([]) // Filmele/serialele cu rating
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const API = `${process.env.NEXT_PUBLIC_BASE_URL}:${process.env.NEXT_PUBLIC_BACKEND_PORT}`;
 
-  // ─── Fetch watchlist on mount ───
+  // ─── Fetch ratings only ───
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) {
@@ -56,52 +56,22 @@ export default function WatchlistPage() {
         }
         if (!res.ok) {
           const errJson = await res.json()
-          throw new Error(errJson.error || 'Failed to load watchlist')
+          throw new Error(errJson.error || 'Failed to load ratings')
         }
         return res.json() as Promise<WatchlistRelease[]>
       })
       .then((data: WatchlistRelease[]) => {
-        setWatchlist(data)
+        // Filter only items that have a rating of LIKE or DISLIKE
+        const filteredData = data.filter((release) => release.rating === 'LIKE' || release.rating === 'DISLIKE')
+        setRatings(filteredData)
         setLoading(false)
       })
       .catch((err: any) => {
-        console.error('Error fetching watchlist:', err)
+        console.error('Error fetching ratings:', err)
         setError(err.message)
         setLoading(false)
       })
   }, [API, router])
-
-  // ─── Helper to toggle "watched" on/off ───
-  const toggleWatched = async (releaseId: number) => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      router.push('/login')
-      return
-    }
-
-    // Find existing entry
-    const entry = watchlist.find((e) => e.id === releaseId)
-    if (!entry) return
-
-    try {
-      const res = await axios.patch(
-        `${API}/watchlist/${releaseId}`,
-        { watched: !entry.watched },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-
-      // Update local state
-      setWatchlist((wl) =>
-        wl.map((e) =>
-          e.id === releaseId
-            ? { ...e, watched: res.data.watched }
-            : e
-        )
-      )
-    } catch (err: any) {
-      console.error('Error toggling watched:', err.response?.data || err.message)
-    }
-  }
 
   // ─── Helper to set or clear rating ("LIKE" / "DISLIKE") ───
   const setRating = async (releaseId: number, newRating: RatingValue) => {
@@ -112,7 +82,7 @@ export default function WatchlistPage() {
     }
 
     // Find existing entry
-    const entry = watchlist.find((e) => e.id === releaseId)
+    const entry = ratings.find((e) => e.id === releaseId)
     if (!entry) return
 
     // If clicked the same rating twice, clear it to null
@@ -125,11 +95,9 @@ export default function WatchlistPage() {
         { rating: finalRating },
         { headers: { Authorization: `Bearer ${token}` } }
       )
-      setWatchlist((wl) =>
+      setRatings((wl) =>
         wl.map((e) =>
-          e.id === releaseId
-            ? { ...e, rating: res.data.rating }
-            : e
+          e.id === releaseId ? { ...e, rating: res.data.rating } : e
         )
       )
     } catch (err: any) {
@@ -141,7 +109,7 @@ export default function WatchlistPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-gray-100">
-        <p>Loading your watchlist…</p>
+        <p>Loading your ratings…</p>
       </div>
     )
   }
@@ -164,17 +132,17 @@ export default function WatchlistPage() {
         >
           Home
         </button>
-        <h1 className="text-3xl font-bold text-purple-primary">Your Watchlist</h1>
+        <h1 className="text-3xl font-bold text-purple-primary">Your Ratings</h1>
         <div className="w-20" /> {/* spacer */}
       </div>
 
-      {watchlist.length === 0 ? (
+      {ratings.length === 0 ? (
         <p className="text-center text-gray-400">
-          You haven't added any releases yet.
+          You haven't rated any releases yet.
         </p>
       ) : (
         <ul className="max-w-3xl mx-auto space-y-6">
-          {watchlist.map((release) => {
+          {ratings.map((release) => {
             const genresArray = release.genres ?? []
 
             // Build poster URL or fallback
@@ -221,70 +189,45 @@ export default function WatchlistPage() {
                   </div>
                 </div>
 
-                {/* ─── RIGHT: Seen + Like/Dislike Controls ─── */}
+                {/* ─── RIGHT: Like/Dislike Controls ─── */}
                 <div className="p-4 flex flex-col items-center space-y-3">
-                  {/* SEEN */}
+                  {/* LIKE */}
                   <button
-                    onClick={() => toggleWatched(release.id)}
+                    onClick={() => setRating(release.id, 'LIKE')}
                     className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`h-8 w-8 ${
-                        release.watched ? 'text-green-400' : 'text-gray-400'
-                      }`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={3}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="mt-1 text-xs text-white">Seen</span>
+                    {release.rating === 'LIKE' ? (
+                      <FontAwesomeIcon
+                        icon={fasThumbsUp}
+                        className="h-8 w-8 text-green-500"
+                      />
+                    ) : (
+                      <FontAwesomeIcon
+                        icon={farThumbsUp}
+                        className="h-8 w-8 text-white"
+                      />
+                    )}
+                    <span className="mt-1 text-xs text-white">Like</span>
                   </button>
 
-                  {/* LIKE / DISLIKE appear only if watched === true */}
-                  {release.watched && (
-                    <div className="flex space-x-4">
-                      {/* LIKE */}
-                      <button
-                        onClick={() => setRating(release.id, 'LIKE')}
-                        className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
-                      >
-                        {release.rating === 'LIKE' ? (
-                          <FontAwesomeIcon
-                            icon={fasThumbsUp}
-                            className="h-8 w-8 text-green-500"
-                          />
-                        ) : (
-                          <FontAwesomeIcon
-                            icon={farThumbsUp}
-                            className="h-8 w-8 text-white"
-                          />
-                        )}
-                        <span className="mt-1 text-xs text-white">Like</span>
-                      </button>
-
-                      {/* DISLIKE */}
-                      <button
-                        onClick={() => setRating(release.id, 'DISLIKE')}
-                        className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
-                      >
-                        {release.rating === 'DISLIKE' ? (
-                          <FontAwesomeIcon
-                            icon={fasThumbsDown}
-                            className="h-8 w-8 text-red-500"
-                          />
-                        ) : (
-                          <FontAwesomeIcon
-                            icon={farThumbsDown}
-                            className="h-8 w-8 text-white"
-                          />
-                        )}
-                        <span className="mt-1 text-xs text-white">Dislike</span>
-                      </button>
-                    </div>
-                  )}
+                  {/* DISLIKE */}
+                  <button
+                    onClick={() => setRating(release.id, 'DISLIKE')}
+                    className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
+                  >
+                    {release.rating === 'DISLIKE' ? (
+                      <FontAwesomeIcon
+                        icon={fasThumbsDown}
+                        className="h-8 w-8 text-red-500"
+                      />
+                    ) : (
+                      <FontAwesomeIcon
+                        icon={farThumbsDown}
+                        className="h-8 w-8 text-white"
+                      />
+                    )}
+                    <span className="mt-1 text-xs text-white">Dislike</span>
+                  </button>
                 </div>
               </li>
             )

@@ -9,7 +9,7 @@ const LoginPage: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    const API = process.env.NEXT_PUBLIC_API_URL
+    const API = `${process.env.NEXT_PUBLIC_BASE_URL}:${process.env.NEXT_PUBLIC_BACKEND_PORT}`;
 
     const response = await fetch(`${API}/login`, { // Use the base API URL for the login route
 

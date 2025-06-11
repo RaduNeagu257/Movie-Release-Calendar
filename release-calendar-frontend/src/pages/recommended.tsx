@@ -61,7 +61,7 @@ export default function RecommendedPage() {
   const [savingPrefs,    setSavingPrefs]    = useState(false)
 
   const router = useRouter()
-  const API    = process.env.NEXT_PUBLIC_API_URL!
+  const API = `${process.env.NEXT_PUBLIC_BASE_URL}:${process.env.NEXT_PUBLIC_BACKEND_PORT}`;
 
   // 1) On mount: fetch prefs, genres, watchlist
   useEffect(() => {
