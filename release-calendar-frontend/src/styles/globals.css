@@ -127,3 +127,12 @@ button:hover {
 form > div {
   margin-bottom: 1rem;
 }
+
+.hide-scrollbar {
+  overflow-x: auto;               /* still scrollable */
+  -ms-overflow-style: none;       /* IE11+ */
+  scrollbar-width: none;          /* Firefox */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;                  /* Chrome, Safari, Opera */
+}

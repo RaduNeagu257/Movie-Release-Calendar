@@ -363,7 +363,7 @@ app.get('/watchlist', async (req, res) => {
           releaseDate: r.releaseDate,
           type:        r.type,
           posterPath:  r.posterPath,
-          overview:    r.overview,
+          overview:    true,
           watched:     entry.watched,
           rating:      entry.rating,
           genres
@@ -555,7 +555,11 @@ app.post('/user/preferences', authMiddleware, async (req, res) => {
 // GET /releases/popular?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&limit=20
 app.get('/releases/popular', async (req, res) => {
   try {
-    const { startDate, endDate, limit } = req.query;
+    const { 
+      startDate, 
+      endDate, 
+      limit 
+    } = req.query;
     if (!startDate || !endDate) {
       return res
         .status(400)

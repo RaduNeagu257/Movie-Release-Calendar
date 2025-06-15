@@ -151,7 +151,7 @@ async function fetchReleasesForYear(year, type) {
     { start: `${year}-10-01`, end: `${year}-12-31` },
   ];
 
-  // For each period (third of the year), make a request
+  // For each period (quarter of the year), make a request
   for (const period of periods) {
     let params = {
       include_adult: false,

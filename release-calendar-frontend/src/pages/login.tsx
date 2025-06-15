@@ -30,7 +30,8 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 max-w-md mx-auto">
+      <div className="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center">
+      <div className="p-6 max-w-md w-full">
       <h2 className="text-2xl mb-4 text-white">Login</h2>
       <form onSubmit={handleLogin}>
         <div className="mb-4">
@@ -60,15 +61,24 @@ const LoginPage: React.FC = () => {
           Log In
         </button>
       </form>
-      <p className="text-white mt-4">
-        Don't have an account?{' '}
+      <div className="mt-4 flex justify-end items-center space-x-4">
+        <span className="text-white whitespace-nowrap">Don't have an account?</span>
         <button
-          onClick={() => router.push('/signup')}
-          className="bg-purple-primary text-white px-4 py-2 rounded mt-4"
+          type="button"
+          onClick={() => router.push('/register')}
+          className="bg-purple-primary text-white px-4 py-2 rounded"
         >
           Sign Up
         </button>
-      </p>
+        <button
+          type="button"
+          onClick={() => router.push('/')}
+          className="bg-purple-primary text-white px-4 py-2 rounded"
+        >
+          Home
+        </button>
+      </div>
+    </div>
     </div>
   )
 }

@@ -25,7 +25,17 @@ interface Release {
   title:      string
   posterPath: string | null
 }
-
+interface WatchlistRelease {
+  id: number
+  title: string
+  releaseDate: string
+  type: 'movie' | 'tv'
+  posterPath: string | null
+  overview: string
+  genres: Genre[]
+  watched: boolean
+  rating: RatingValue
+}
 // Full details for the modal
 interface ReleaseDetails extends Release {
   releaseDate: string
@@ -34,6 +44,7 @@ interface ReleaseDetails extends Release {
   watched:     boolean
   rating:      RatingValue
   overview:    string
+  tracked:     boolean
 }
 
 export default function HomePage() {
@@ -55,13 +66,16 @@ export default function HomePage() {
   const [recLeft, setRecLeft] = useState(false)
   const [recRight, setRecRight] = useState(false)
 
-  const popRef = useRef<HTMLDivElement>(null)
-  const recRef = useRef<HTMLDivElement>(null)
-
   // — Modal state —
   const [selectedRelease, setSelectedRelease] = useState<ReleaseDetails | null>(null)
 
-  const API = process.env.NEXT_PUBLIC_API_URL || ''
+  const popRef = useRef<HTMLDivElement>(null)
+  const recRef = useRef<HTMLDivElement>(null)
+
+  const closeDetail = () => setSelectedRelease(null);
+
+  //const API = process.env.NEXT_PUBLIC_API_URL || ''
+  const API = `${process.env.NEXT_PUBLIC_BASE_URL}:${process.env.NEXT_PUBLIC_BACKEND_PORT}`;
 
   // ─── Authentication ───
   useEffect(() => {
@@ -125,6 +139,20 @@ export default function HomePage() {
     fetchRec()
   }, [API, isAuthenticated])
 
+  // ─── Listen for ESC key ─────────────────────────────────────
+  useEffect(() => {
+    if (!selectedRelease) return;              // only active when open
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeDetail();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedRelease]);
+
   // ─── Scroll arrow logic ───
   const updateButtons = (
     el: HTMLDivElement | null,
@@ -169,32 +197,93 @@ export default function HomePage() {
 
   // ─── Open modal on click ───
   const onPosterClick = async (id: number) => {
-    try {
-      const { data } = await axios.get<ReleaseDetails>(
-        `${API}/releases`,
-        {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-          params: { id, include: 'overview,genres,watchlist' }
-        }
-      )
-      setSelectedRelease(data)
-    } catch (e) {
-      console.error('Failed to load details', e)
+    const token = localStorage.getItem('token')
+        try {
+            // 1) Fetch the release details + genres via your pivot endpoint
+            const { data: pivotRows } = await axios.get<
+              Array<{ release: any; genre: Genre }>
+            >(`${API}/releaseGenre`, {
+             params: { releaseId: id },
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (pivotRows.length === 0) {
+              console.warn(`No details found for release ${id}`)
+              return
+            }
+            const base = pivotRows[0].release
+            const detail: ReleaseDetails = {
+              id:          base.id,
+              title:       base.title,
+              releaseDate: base.releaseDate,
+              type:        base.type,
+              posterPath:  base.posterPath,
+              overview:    base.overview,
+              genres:      pivotRows.map(p => p.genre),
+              // default to not tracked
+              watched:     false,
+              rating:      null,
+              tracked:     false,
+            }
+      
+            // 2) Fetch the full watchlist, then see if our release is in it
+            const wlRes = await fetch(`${API}/watchlist`, {
+              headers: { Authorization: `Bearer ${token}` }
+            })
+            if (wlRes.ok) {
+              const watchlistData = await wlRes.json() as WatchlistRelease[]
+              const entry = watchlistData.find(e => e.id === id)
+              if (entry) {
+                detail.watched = entry.watched
+                detail.rating  = entry.rating
+                detail.tracked = true
+              }
+            } else {
+              console.warn('Could not load watchlist for merging')
+            }
+      
+            // 3) Now open the modal _every time_
+            setSelectedRelease(detail)
+    } catch (err) {
+      console.error(err)
     }
   }
 
   // ─── In‐modal handlers ───
-  const toggleWatched = async (rid: number) => {
+  const toggleWatched = async (id: number) => {
     if (!selectedRelease) return
+    const token = localStorage.getItem('token')
+    if (!token) { router.push('/login'); return }
     const newWatched = !selectedRelease.watched
-    try {
-      const res = await axios.patch(
-        `${API}/watchlist/${rid}`,
-        { watched: newWatched },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+    if (!selectedRelease.tracked) {
+      // not tracked → create entry with watched=newWatched
+      try {
+      const res = await axios.post(
+      `${API}/watchlist`,
+      { releaseId: id, watched: newWatched, rating: null },
+      { headers: { Authorization: `Bearer ${token}` } }
       )
-      setSelectedRelease(sr => sr && { ...sr, watched: res.data.watched })
-    } catch (e) { console.error(e) }
+      setSelectedRelease(sr => sr && ({
+      ...sr,
+      tracked: true,
+      watched: res.data.watched,
+               rating:  res.data.rating,
+             }))
+           } catch (err) {
+             console.error('Error creating watchlist entry:', err)
+           }
+         } else {
+           // already tracked → just patch watched
+           try {
+             const res = await axios.patch(
+               `${API}/watchlist/${id}`,
+               { watched: newWatched },
+               { headers: { Authorization: `Bearer ${token}` } }
+             )
+             setSelectedRelease(sr => sr && ({ ...sr, watched: res.data.watched }))
+           } catch (err) {
+             console.error('Error updating watched status:', err)
+           }
+         }
   }
   const setRating = async (rid: number, r: RatingValue) => {
     if (!selectedRelease) return
@@ -208,32 +297,60 @@ export default function HomePage() {
       setSelectedRelease(sr => sr && { ...sr, rating: res.data.rating })
     } catch (e) { console.error(e) }
   }
-  const toggleTrack = async (rid: number) => {
+   // ─── Toggle Track (upsert‐style, from recommended.tsx) ─── :contentReference[oaicite:1]{index=1}
+   const toggleTrack = async (releaseId: number) => {
     if (!selectedRelease) return
-    try {
-      if (selectedRelease.watched || selectedRelease.rating !== null) {
+    const token = localStorage.getItem('token')!
+    if (!token) { router.push('/login'); return }
+
+      if (selectedRelease.tracked) {
         // already tracked → delete
-        await axios.delete(
-          `${API}/watchlist/${rid}`,
-          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-        )
-        setSelectedRelease(sr => sr && { ...sr, watched: false, rating: null })
+        try {
+          await axios.delete(
+            `${API}/watchlist/${releaseId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          setSelectedRelease(sr => sr && ({
+            ...sr,
+            tracked: false,
+            watched:  false,
+            rating:   null,
+          }))
+        } catch (err) {
+          console.error('Error deleting watchlist entry:', err)
+        }
       } else {
-        // not tracked → add
-        const res = await axios.post(
-          `${API}/watchlist`,
-          { releaseId: rid, watched: false, rating: null },
-          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-        )
-        setSelectedRelease(sr => sr && ({ ...sr, watched: res.data.watched, rating: res.data.rating }))
+        // not tracked → add (watched: false, rating: null)
+        try {
+          const res = await axios.post(
+            `${API}/watchlist`,
+            { releaseId, watched: false, rating: null },
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          setSelectedRelease(sr => sr && ({
+            ...sr,
+            tracked: true,
+            watched: res.data.watched,
+            rating:  res.data.rating,
+          }))
+        } catch (err) {
+          console.error('Error creating watchlist entry:', err)
+        }
       }
-    } catch (e) { console.error(e) }
-  }
+    }
+    
 
   return (
-    <div className="bg-gray-900 text-gray-100 p-6 space-y-10">
+    <div className="bg-gray-900 text-gray-100 p-6 space-y-10 min-h-screen">
       {/* ── HEADER ── */}
-      <div className="flex justify-end items-center mb-4 space-x-4">
+      <div className="flex justify-between items-center mb-4 space-x-4">
+        {/* Title & catchphrase */}
+        <div>
+          <h1 className="text-3xl font-bold">Welcome to CineLog</h1>
+          <p className="italic text-gray-300">Your personal cinema diary</p>
+        </div>
+        {/* Action buttons */}
+        <div className="flex items-center space-x-4">
         <button
           onClick={() => router.push('/releaseCalendar')}
           className="bg-purple-primary text-white px-4 py-2 rounded hover:bg-purple-dark"
@@ -262,13 +379,14 @@ export default function HomePage() {
           )
         }
       </div>
+      </div>
 
       {/* ── POPULAR ── */}
       <section>
         <h2 className="text-2xl font-bold mb-2">Popular</h2>
         <div className="relative">
           {popLeft  && <button onClick={() => scrollPopularBy(-200)} className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10"><ChevronLeft /></button>}
-          <div ref={popRef} className="flex overflow-x-auto space-x-4 pb-4">
+          <div ref={popRef} className="hide-scrollbar flex overflow-x-auto space-x-4 pb-4">
             {popular.map(r => (
               <div key={r.id} className="flex-shrink-0 w-40">
                 <img
@@ -287,10 +405,10 @@ export default function HomePage() {
       {/* ── RECOMMENDED ── */}
       {isAuthenticated && recommended.length > 0 && (
         <section>
-          <h2 className="text-2xl font-bold mb-2">Recommended: {baseTitle}</h2>
+          <h2 className="text-2xl font-bold mb-2">Because you liked {baseTitle}</h2>
           <div className="relative">
             {recLeft  && <button onClick={() => scrollRecommendedBy(-200)} className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10"><ChevronLeft/></button>}
-            <div ref={recRef} className="flex overflow-x-auto space-x-4 pb-4">
+            <div ref={recRef} className="hide-scrollbar flex overflow-x-auto space-x-4 pb-4">
               {recommended.map(r => (
                 <div key={r.id} className="flex-shrink-0 w-40">
                   <img
@@ -309,7 +427,7 @@ export default function HomePage() {
 
       {/* ── MODAL ── */}
       {selectedRelease && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-blue-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
           <div className="relative max-w-3xl w-full">
             {/* ✕ CLOSE */}
             <button
@@ -362,7 +480,7 @@ export default function HomePage() {
                     className="flex flex-col items-center justify-center bg-purple-primary p-2 rounded-lg focus:outline-none"
                   >
                     <FontAwesomeIcon
-                      icon={selectedRelease.watched || selectedRelease.rating !== null
+                      icon={selectedRelease.tracked
                         ? fasBookmarkSolid
                         : farBookmarkRegular}
                       className="h-8 w-8 text-white"
