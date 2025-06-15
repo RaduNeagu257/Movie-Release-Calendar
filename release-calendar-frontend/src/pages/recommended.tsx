@@ -49,6 +49,7 @@ interface Release {
   type:         'movie' | 'tv'
   posterPath:   string | null
   genres:       Genre[]
+  overview:    string 
 }
 
 export default function RecommendedPage() {
@@ -362,55 +363,31 @@ const toggleWatched = async (releaseId: number) => {
                     <p className="text-gray-300 mb-2">
                       Genres: {r.genres.map(g => g.name).join(', ')}
                     </p>
+                    <h3 className="text-xl font-medium mt-4 mb-1">Overview</h3>
+                    <p className="text-gray-300 text-sm">{r.overview}</p>
                   </div>
                 </div>
 
                 {/* RIGHT: Track + Seen + Like/Dislike */}
-                <div className="p-4 flex flex-col items-center space-y-3">
-                  {/* TRACK */}
-                  <button
-                    onClick={() => toggleTrack(r.id)}
-                    className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
-                  >
-                    <FontAwesomeIcon
-                      icon={isTracked ? fasBookmarkSolid : farBookmarkRegular}
-                      className="h-8 w-8 text-white"
-                    />
-                    <span className="mt-1 text-xs text-white">
-                      Track
-                    </span>
-                  </button>
-
-                  {/* SEEN */}
-                  <button
-                    onClick={() => toggleWatched(r.id)}
-                    className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`h-8 w-8 ${
-                        isWatched ? 'text-green-400' : 'text-gray-400'
-                      }`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={3}
+                <div className="self-center flex space-x-4">
+                  {/* ─── COLUMN 1: Track (always) + Like (only if watched) ─── */}
+                  <div className="flex flex-col items-center space-y-1">
+                    {/* TRACK BUTTON */}
+                    <button
+                      onClick={() => toggleTrack(r.id)}
+                      className="flex flex-col items-center justify-center bg-purple-primary p-2 rounded-lg focus:outline-none"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
+                      <FontAwesomeIcon
+                        icon={isTracked ? fasBookmarkSolid : farBookmarkRegular}
+                        className="h-8 w-8 text-white"
                       />
-                    </svg>
-                    <span className="mt-1 text-xs text-white">Seen</span>
-                  </button>
+                      <span className="mt-1 text-xs text-white">Track</span>
+                    </button>
 
-                  {/* LIKE / DISLIKE (only if seen) */}
-                  {isWatched && (
-                    <div className="flex space-x-4">
+                    {isWatched && (
                       <button
                         onClick={() => setRating(r.id, 'LIKE')}
-                        className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
+                        className="flex flex-col items-center justify-center bg-purple-primary p-2 rounded-lg focus:outline-none"
                       >
                         {rating === 'LIKE' ? (
                           <FontAwesomeIcon
@@ -423,13 +400,35 @@ const toggleWatched = async (releaseId: number) => {
                             className="h-8 w-8 text-white"
                           />
                         )}
-                        <span className="mt-1 text-xs text-white">
-                          Like
-                        </span>
+                        <span className="mt-1 text-xs text-white">Like</span>
                       </button>
+                    )}
+                  </div>
+
+                  {/* ─── COLUMN 2: Seen (always) + Dislike (only if watched) ─── */}
+                  <div className="flex flex-col items-center space-y-1">
+                    {/* SEEN BUTTON */}
+                    <button
+                      onClick={() => toggleWatched(r.id)}
+                      className="flex flex-col items-center justify-center bg-purple-primary p-2 rounded-lg focus:outline-none"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className={`h-8 w-8 ${isWatched ? 'text-green-400' : 'text-gray-400'}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="mt-1 text-xs text-white">Seen</span>
+                    </button>
+
+                    {isWatched && (
                       <button
                         onClick={() => setRating(r.id, 'DISLIKE')}
-                        className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
+                        className="flex flex-col items-center justify-center bg-purple-primary p-2 rounded-lg focus:outline-none"
                       >
                         {rating === 'DISLIKE' ? (
                           <FontAwesomeIcon
@@ -442,12 +441,10 @@ const toggleWatched = async (releaseId: number) => {
                             className="h-8 w-8 text-white"
                           />
                         )}
-                        <span className="mt-1 text-xs text-white">
-                          Dislike
-                        </span>
+                        <span className="mt-1 text-xs text-white">Dislike</span>
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </li>
             )

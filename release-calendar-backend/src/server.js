@@ -343,7 +343,8 @@ app.get('/watchlist', async (req, res) => {
             title:       true,
             releaseDate: true,
             type:        true,
-            posterPath:  true
+            posterPath:  true,
+            overview:    true,
           }
         });
         // 2b) Fetch all genres for that release via the pivot
@@ -362,6 +363,7 @@ app.get('/watchlist', async (req, res) => {
           releaseDate: r.releaseDate,
           type:        r.type,
           posterPath:  r.posterPath,
+          overview:    r.overview,
           watched:     entry.watched,
           rating:      entry.rating,
           genres
@@ -612,14 +614,13 @@ app.get('/releases/popular', async (req, res) => {
 });
 
 // GET /releases/recommended?releaseId=<id>&limit=<n>
-app.get('/releases/recommended', async (req, res) => {
+// — only for authenticated users
+app.get('/releases/recommended', authMiddleware, async (req, res) => {
   try {
     const { releaseId: releaseIdParam, limit = '20' } = req.query;
     const limitNum = parseInt(limit, 10) || 20;
 
-    // 1) Determine the base release:
-    //    - if releaseId query provided, use it
-    //    - otherwise fall back to the user's most recent "LIKE"
+    // 1) Determine baseReleaseId from query or from this user’s last LIKE
     let baseReleaseId = releaseIdParam
       ? parseInt(releaseIdParam, 10)
       : null;
@@ -629,66 +630,59 @@ app.get('/releases/recommended', async (req, res) => {
         where: { userId: req.userId, rating: 'LIKE' },
         orderBy: { createdAt: 'desc' },
         select: { releaseId: true }
-      }); // :contentReference[oaicite:0]{index=0}
+      });
 
+      // If they haven’t liked anything → nothing to recommend
       if (!lastLike) {
-        // No liked items → nothing to recommend
         return res.json({ base: null, items: [] });
       }
+
       baseReleaseId = lastLike.releaseId;
     }
 
-    // 2) Fetch the base release’s info
+    // 2) Load the base release info
     const base = await prisma.release.findUnique({
       where: { id: baseReleaseId },
       select: { id: true, title: true, posterPath: true }
     });
-
     if (!base) {
       return res.status(404).json({ error: 'Base release not found' });
     }
 
-    // 3) Get all genre-IDs for that release
+    // 3) Find genres for base release
     const baseGenres = await prisma.releaseGenre.findMany({
       where: { releaseId: baseReleaseId },
       select: { genreId: true }
     });
-
     const genreIds = baseGenres.map(g => g.genreId);
-
     if (genreIds.length === 0) {
-      // No genres → no recommendations
       return res.json({ base, items: [] });
     }
 
-    // 4) Find other releases sharing those genres
+    // 4) Find other releases sharing those genres…
     const pivots = await prisma.releaseGenre.findMany({
       where: {
-        genreId: { in: genreIds },
+        genreId:   { in: genreIds },
         releaseId: { not: baseReleaseId }
       },
       select: { releaseId: true }
-    }); // :contentReference[oaicite:1]{index=1}
+    });
 
-    // 5) Count matches per releaseId
+    // 5–8) Count, sort, fetch and order exactly as before…
     const countMap = {};
     pivots.forEach(({ releaseId }) => {
       countMap[releaseId] = (countMap[releaseId] || 0) + 1;
     });
-
-    // 6) Sort by descending match count and take top N
     const topIds = Object.entries(countMap)
       .sort((a, b) => b[1] - a[1])
       .slice(0, limitNum)
       .map(([id]) => parseInt(id, 10));
 
-    // 7) Fetch those releases’ details
     const items = await prisma.release.findMany({
       where: { id: { in: topIds } },
       select: { id: true, title: true, posterPath: true }
     });
 
-    // 8) Re-order to match topIds
     const ordered = topIds
       .map(id => items.find(r => r.id === id))
       .filter(Boolean);
@@ -699,6 +693,7 @@ app.get('/releases/recommended', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch recommendations.' });
   }
 });
+
 
 
 

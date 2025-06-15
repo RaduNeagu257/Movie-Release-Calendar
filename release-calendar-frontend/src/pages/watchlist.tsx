@@ -7,10 +7,12 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faThumbsUp as fasThumbsUp,
   faThumbsDown as fasThumbsDown,
+  faBookmark as fasBookmarkSolid,
 } from '@fortawesome/free-solid-svg-icons'
 import {
   faThumbsUp as farThumbsUp,
   faThumbsDown as farThumbsDown,
+  faBookmark as farBookmarkRegular,
 } from '@fortawesome/free-regular-svg-icons'
 
 interface Genre {
@@ -29,6 +31,7 @@ interface WatchlistRelease {
   genres:       Genre[]
   watched:      boolean
   rating:       RatingValue
+  overview:     string
 }
 
 export default function WatchlistPage() {
@@ -36,9 +39,9 @@ export default function WatchlistPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const API = `${process.env.NEXT_PUBLIC_BASE_URL}:${process.env.NEXT_PUBLIC_BACKEND_PORT}`;
+  const API = `${process.env.NEXT_PUBLIC_BASE_URL}:${process.env.NEXT_PUBLIC_BACKEND_PORT}`
 
-  // ─── Fetch watchlist on mount ───
+  // ─── Load your watchlist entries ───
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) {
@@ -60,7 +63,7 @@ export default function WatchlistPage() {
         }
         return res.json() as Promise<WatchlistRelease[]>
       })
-      .then((data: WatchlistRelease[]) => {
+      .then((data) => {
         setWatchlist(data)
         setLoading(false)
       })
@@ -71,15 +74,13 @@ export default function WatchlistPage() {
       })
   }, [API, router])
 
-  // ─── Helper to toggle "watched" on/off ───
+  // ─── Toggle “watched” on/off ───
   const toggleWatched = async (releaseId: number) => {
     const token = localStorage.getItem('token')
     if (!token) {
       router.push('/login')
       return
     }
-
-    // Find existing entry
     const entry = watchlist.find((e) => e.id === releaseId)
     if (!entry) return
 
@@ -89,13 +90,9 @@ export default function WatchlistPage() {
         { watched: !entry.watched },
         { headers: { Authorization: `Bearer ${token}` } }
       )
-
-      // Update local state
       setWatchlist((wl) =>
         wl.map((e) =>
-          e.id === releaseId
-            ? { ...e, watched: res.data.watched }
-            : e
+          e.id === releaseId ? { ...e, watched: res.data.watched } : e
         )
       )
     } catch (err: any) {
@@ -103,19 +100,16 @@ export default function WatchlistPage() {
     }
   }
 
-  // ─── Helper to set or clear rating ("LIKE" / "DISLIKE") ───
+  // ─── Set or clear “LIKE” / “DISLIKE” ───
   const setRating = async (releaseId: number, newRating: RatingValue) => {
     const token = localStorage.getItem('token')
     if (!token) {
       router.push('/login')
       return
     }
-
-    // Find existing entry
     const entry = watchlist.find((e) => e.id === releaseId)
     if (!entry) return
 
-    // If clicked the same rating twice, clear it to null
     const finalRating: RatingValue =
       entry.rating === newRating ? null : newRating
 
@@ -127,14 +121,26 @@ export default function WatchlistPage() {
       )
       setWatchlist((wl) =>
         wl.map((e) =>
-          e.id === releaseId
-            ? { ...e, rating: res.data.rating }
-            : e
+          e.id === releaseId ? { ...e, rating: res.data.rating } : e
         )
       )
     } catch (err: any) {
       console.error('Error updating rating:', err.response?.data || err.message)
     }
+  }
+
+  // ─── Remove from watchlist (“Track” toggle) ───
+  const toggleTrack = async (releaseId: number) => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+    await axios.delete(
+      `${API}/watchlist/${releaseId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    setWatchlist((wl) => wl.filter((e) => e.id !== releaseId))
   }
 
   // ─── Loading / Error States ───
@@ -145,7 +151,6 @@ export default function WatchlistPage() {
       </div>
     )
   }
-
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-red-500">
@@ -156,7 +161,7 @@ export default function WatchlistPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
-      {/* Header: Home button + Title */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={() => router.push('/')}
@@ -176,8 +181,6 @@ export default function WatchlistPage() {
         <ul className="max-w-3xl mx-auto space-y-6">
           {watchlist.map((release) => {
             const genresArray = release.genres ?? []
-
-            // Build poster URL or fallback
             const posterUrl = release.posterPath
               ? `https://image.tmdb.org/t/p/w500${release.posterPath}`
               : null
@@ -187,7 +190,7 @@ export default function WatchlistPage() {
                 key={release.id}
                 className="bg-gray-800 rounded-xl overflow-hidden shadow-lg flex flex-col sm:flex-row"
               >
-                {/* ─── LEFT: Cover Image + Details ─── */}
+                {/* LEFT: Cover Image */}
                 <div className="flex-shrink-0">
                   {posterUrl ? (
                     <img
@@ -202,7 +205,7 @@ export default function WatchlistPage() {
                   )}
                 </div>
 
-                {/* ─── MIDDLE: Release Details ─── */}
+                {/* MIDDLE: Details + Overview */}
                 <div className="p-4 flex-1 flex flex-col justify-between">
                   <div>
                     <h2 className="text-2xl font-semibold mb-2">{release.title}</h2>
@@ -218,38 +221,30 @@ export default function WatchlistPage() {
                       <span className="font-medium">Genres:</span>{' '}
                       {genresArray.map((g) => g.name).join(', ')}
                     </p>
+                    <h3 className="text-xl font-medium mt-4 mb-1">Overview</h3>
+                    <p className="text-gray-300 text-sm">{release.overview}</p>
                   </div>
                 </div>
 
-                {/* ─── RIGHT: Seen + Like/Dislike Controls ─── */}
-                <div className="p-4 flex flex-col items-center space-y-3">
-                  {/* SEEN */}
-                  <button
-                    onClick={() => toggleWatched(release.id)}
-                    className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`h-8 w-8 ${
-                        release.watched ? 'text-green-400' : 'text-gray-400'
-                      }`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={3}
+                {/* RIGHT: Track + Like / Seen + Dislike Buttons */}
+                <div className="self-center flex space-x-4">
+                  {/* COLUMN 1: Track (always) + Like (if watched) */}
+                  <div className="flex flex-col items-center space-y-1">
+                    <button
+                      onClick={() => toggleTrack(release.id)}
+                      className="flex flex-col items-center justify-center bg-purple-primary p-2 rounded-lg focus:outline-none"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="mt-1 text-xs text-white">Seen</span>
-                  </button>
+                      <FontAwesomeIcon
+                        icon={fasBookmarkSolid}
+                        className="h-8 w-8 text-white"
+                      />
+                      <span className="mt-1 text-xs text-white">Track</span>
+                    </button>
 
-                  {/* LIKE / DISLIKE appear only if watched === true */}
-                  {release.watched && (
-                    <div className="flex space-x-4">
-                      {/* LIKE */}
+                    {release.watched && (
                       <button
                         onClick={() => setRating(release.id, 'LIKE')}
-                        className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
+                        className="flex flex-col items-center justify-center bg-purple-primary p-2 rounded-lg focus:outline-none"
                       >
                         {release.rating === 'LIKE' ? (
                           <FontAwesomeIcon
@@ -264,11 +259,38 @@ export default function WatchlistPage() {
                         )}
                         <span className="mt-1 text-xs text-white">Like</span>
                       </button>
+                    )}
+                  </div>
 
-                      {/* DISLIKE */}
+                  {/* COLUMN 2: Seen (always) + Dislike (if watched) */}
+                  <div className="flex flex-col items-center space-y-1">
+                    <button
+                      onClick={() => toggleWatched(release.id)}
+                      className="flex flex-col items-center justify-center bg-purple-primary p-2 rounded-lg focus:outline-none"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className={`h-8 w-8 ${
+                          release.watched ? 'text-green-400' : 'text-gray-400'
+                        }`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      <span className="mt-1 text-xs text-white">Seen</span>
+                    </button>
+
+                    {release.watched && (
                       <button
                         onClick={() => setRating(release.id, 'DISLIKE')}
-                        className="flex flex-col items-center bg-purple-primary p-2 rounded-lg focus:outline-none"
+                        className="flex flex-col items-center justify-center bg-purple-primary p-2 rounded-lg focus:outline-none"
                       >
                         {release.rating === 'DISLIKE' ? (
                           <FontAwesomeIcon
@@ -283,8 +305,8 @@ export default function WatchlistPage() {
                         )}
                         <span className="mt-1 text-xs text-white">Dislike</span>
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </li>
             )

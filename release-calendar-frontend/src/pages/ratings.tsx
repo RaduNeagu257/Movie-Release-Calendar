@@ -29,6 +29,7 @@ interface WatchlistRelease {
   genres: Genre[]
   watched: boolean
   rating: RatingValue
+  overview: string
 }
 
 export default function RatingsPage() {
@@ -186,6 +187,8 @@ export default function RatingsPage() {
                       <span className="font-medium">Genres:</span>{' '}
                       {genresArray.map((g) => g.name).join(', ')}
                     </p>
+                    <h3 className="text-xl font-medium mt-4 mb-1">Overview</h3>
+                    <p className="text-gray-300 text-sm">{release.overview}</p>
                   </div>
                 </div>
 
