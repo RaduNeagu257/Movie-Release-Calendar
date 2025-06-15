@@ -550,6 +550,156 @@ app.post('/user/preferences', authMiddleware, async (req, res) => {
   }
 })
 
+// GET /releases/popular?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&limit=20
+app.get('/releases/popular', async (req, res) => {
+  try {
+    const { startDate, endDate, limit } = req.query;
+    if (!startDate || !endDate) {
+      return res
+        .status(400)
+        .json({ error: 'startDate and endDate are required (YYYY-MM-DD)' });
+    }
+
+    // parse the ISO-date strings
+    const start = new Date(startDate);
+    const end   = new Date(endDate);
+
+    // 1) fetch all watchlist entries whose release falls in [start, end)
+    const entries = await prisma.watchlist.findMany({
+      where: {
+        release: {
+          releaseDate: { gte: start, lt: end }
+        }
+      },
+      select: { releaseId: true, rating: true }
+    });
+
+    // 2) compute score = (# of LIKE) − (# of DISLIKE) per releaseId
+    const scoreMap = {};
+    entries.forEach(({ releaseId, rating }) => {
+      const delta = rating === 'LIKE' ? 1
+                  : rating === 'DISLIKE' ? -1
+                  : 0;
+      scoreMap[releaseId] = (scoreMap[releaseId] || 0) + delta;
+    });
+
+    // 3) sort by descending score, take top N
+    const topIds = Object.entries(scoreMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, parseInt(limit, 10) || 20)
+      .map(([id]) => parseInt(id, 10));
+
+    if (topIds.length === 0) {
+      return res.json([]);
+    }
+
+    // 4) fetch those releases’ basic info
+    const releases = await prisma.release.findMany({
+      where: { id: { in: topIds } },
+      select: { id: true, title: true, posterPath: true }
+    });
+
+    // 5) re-order to match topIds
+    const ordered = topIds
+      .map(id => releases.find(r => r.id === id))
+      .filter(r => r); // drop any missing
+
+    res.json(ordered);
+  } catch (err) {
+    console.error('GET /releases/popular error:', err);
+    res.status(500).json({ error: 'Failed to fetch popular releases.' });
+  }
+});
+
+// GET /releases/recommended?releaseId=<id>&limit=<n>
+app.get('/releases/recommended', async (req, res) => {
+  try {
+    const { releaseId: releaseIdParam, limit = '20' } = req.query;
+    const limitNum = parseInt(limit, 10) || 20;
+
+    // 1) Determine the base release:
+    //    - if releaseId query provided, use it
+    //    - otherwise fall back to the user's most recent "LIKE"
+    let baseReleaseId = releaseIdParam
+      ? parseInt(releaseIdParam, 10)
+      : null;
+
+    if (!baseReleaseId) {
+      const lastLike = await prisma.watchlist.findFirst({
+        where: { userId: req.userId, rating: 'LIKE' },
+        orderBy: { createdAt: 'desc' },
+        select: { releaseId: true }
+      }); // :contentReference[oaicite:0]{index=0}
+
+      if (!lastLike) {
+        // No liked items → nothing to recommend
+        return res.json({ base: null, items: [] });
+      }
+      baseReleaseId = lastLike.releaseId;
+    }
+
+    // 2) Fetch the base release’s info
+    const base = await prisma.release.findUnique({
+      where: { id: baseReleaseId },
+      select: { id: true, title: true, posterPath: true }
+    });
+
+    if (!base) {
+      return res.status(404).json({ error: 'Base release not found' });
+    }
+
+    // 3) Get all genre-IDs for that release
+    const baseGenres = await prisma.releaseGenre.findMany({
+      where: { releaseId: baseReleaseId },
+      select: { genreId: true }
+    });
+
+    const genreIds = baseGenres.map(g => g.genreId);
+
+    if (genreIds.length === 0) {
+      // No genres → no recommendations
+      return res.json({ base, items: [] });
+    }
+
+    // 4) Find other releases sharing those genres
+    const pivots = await prisma.releaseGenre.findMany({
+      where: {
+        genreId: { in: genreIds },
+        releaseId: { not: baseReleaseId }
+      },
+      select: { releaseId: true }
+    }); // :contentReference[oaicite:1]{index=1}
+
+    // 5) Count matches per releaseId
+    const countMap = {};
+    pivots.forEach(({ releaseId }) => {
+      countMap[releaseId] = (countMap[releaseId] || 0) + 1;
+    });
+
+    // 6) Sort by descending match count and take top N
+    const topIds = Object.entries(countMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limitNum)
+      .map(([id]) => parseInt(id, 10));
+
+    // 7) Fetch those releases’ details
+    const items = await prisma.release.findMany({
+      where: { id: { in: topIds } },
+      select: { id: true, title: true, posterPath: true }
+    });
+
+    // 8) Re-order to match topIds
+    const ordered = topIds
+      .map(id => items.find(r => r.id === id))
+      .filter(Boolean);
+
+    res.json({ base, items: ordered });
+  } catch (err) {
+    console.error('GET /releases/recommended error:', err);
+    res.status(500).json({ error: 'Failed to fetch recommendations.' });
+  }
+});
+
 
 
 // Start server
