@@ -70,9 +70,9 @@ export default function Home() {
         .then(async (res) => {
           if (res.status === 401) {
             // Prevent redirection if on the home page
-            if (router.pathname !== '/') {
-              router.push('/login')
-            }
+            //if (router.pathname !== '/') {
+            //  router.push('/login')
+            //}
             return []
           }
           if (!res.ok) {

@@ -621,7 +621,10 @@ app.get('/releases/popular', async (req, res) => {
 // — only for authenticated users
 app.get('/releases/recommended', authMiddleware, async (req, res) => {
   try {
-    const { releaseId: releaseIdParam, limit = '20' } = req.query;
+    const { 
+      releaseId: releaseIdParam,
+      limit = '20'
+    } = req.query;
     const limitNum = parseInt(limit, 10) || 20;
 
     // 1) Determine baseReleaseId from query or from this user’s last LIKE
